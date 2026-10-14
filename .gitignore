@@ -1,0 +1,15 @@
+# Android Studio and machine-specific configuration
+.idea/
+*.iml
+local.properties
+.gradle/
+.kotlin/
+**/build/
+build-logs/
+captures/
+.DS_Store
+
+# Never commit signing credentials or release keystores
+*.jks
+*.keystore
+keystore.properties
