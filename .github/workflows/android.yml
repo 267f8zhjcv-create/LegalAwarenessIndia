@@ -1,77 +1,53 @@
 name: Build Android APK
-on:
-  push:
-  workflow_dispatch:
+on: [push, workflow_dispatch]
+
 permissions:
-  contents: write
+  contents: read
+
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
+
 jobs:
   build:
-    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
-    env:
-      BUILD_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-      - name: Import project
-        if: hashFiles('settings.gradle.kts') == ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo '9abf5e0aae7b355b307ce4d80f304552de396a17abbf5654460d874caca7d952  LegalAwarenessIndia (1).zip' | sha256sum --check -
-          unzip -q 'LegalAwarenessIndia (1).zip' -d "$RUNNER_TEMP/project"
-          cp -a "$RUNNER_TEMP/project/LegalAwarenessIndia/"* .
-          cp "$RUNNER_TEMP/project/LegalAwarenessIndia/.gitignore" "$RUNNER_TEMP/project/LegalAwarenessIndia/.gitattributes" .
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('README.md')
-          p.write_text(p.read_text().replace('Pull requests also run the checks.', 'This workflow runs on default-branch pushes and manual starts.'))
-          PY
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm -- 'LegalAwarenessIndia (1).zip'
-          git add --all -- . ':(exclude).github'
-          git commit -m 'Import Android project'
-          git push origin "HEAD:refs/heads/$BUILD_BRANCH"
-      - name: Prepare logs
-        run: mkdir -p build-logs
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: android-actions/setup-android@v3
         with:
-          packages: platform-tools uses: android-actions/setup-android@v3
-        with:
           packages: platform-tools
+
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+
       - name: Compile APK
-        shell: bash
-        run: gradle --no-daemon --stacktrace --console=plain assembleDebug 2>&1 | tee build-logs/build.log
+        run: gradle --no-daemon --stacktrace assembleDebug
+
       - name: Unit tests
-        shell: bash
-        run: gradle --no-daemon --stacktrace --console=plain testDebugUnitTest 2>&1 | tee build-logs/tests.log
+        run: gradle --no-daemon --stacktrace testDebugUnitTest
+
       - name: Android lint
-        shell: bash
-        run: gradle --no-daemon --stacktrace --console=plain lintDebug 2>&1 | tee build-logs/lint.log
+        run: gradle --no-daemon --stacktrace lintDebug
+
       - uses: actions/upload-artifact@v4
         with:
           name: Legal-Awareness-India-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: verification-reports
-          path: |
-            build-logs/
-            app/build/reports/
+          path: app/build/reports/
           if-no-files-found: ignore
